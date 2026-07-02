@@ -63,6 +63,61 @@ dotnet run
 # then open http://localhost:5000/portallogon-direct/
 ```
 
+### Setup instructions
+
+Follow these steps to download, configure, and run the application from GitHub.
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/randeny/ciam.git
+   cd ciam
+   ```
+
+2. **Install the .NET 9 SDK** (if not already installed)
+
+   Download from https://dotnet.microsoft.com/download/dotnet/9.0 and verify:
+
+   ```bash
+   dotnet --version
+   ```
+
+3. **Provide the OBO client secret** (never commit this value)
+
+   ```bash
+   # macOS / Linux
+   export PortalLogon__OboClientSecret="<your-obo-client-secret>"
+
+   # Windows (PowerShell)
+   $env:PortalLogon__OboClientSecret = "<your-obo-client-secret>"
+   ```
+
+4. **Restore and build**
+
+   ```bash
+   dotnet restore
+   dotnet build
+   ```
+
+5. **Run the application**
+
+   ```bash
+   dotnet run
+   ```
+
+6. **Open the portal** in a browser:
+
+   ```
+   http://localhost:5000/portallogon-direct/
+   ```
+
+To deploy to Azure App Service instead, publish the app and set the `PortalLogon__OboClientSecret` application setting on the target web app:
+
+```bash
+dotnet publish -c Release -o ./publish
+# then zip-deploy ./publish to your App Service
+```
+
 ## Requirements
 
 - .NET 9 SDK
