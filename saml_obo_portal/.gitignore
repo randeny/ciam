@@ -1,0 +1,32 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+publish/
+*.user
+*.suo
+
+# Rider/VS
+.vs/
+.idea/
+
+# Local secrets / environment overrides
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.Local.json
+*.pfx
+*.key
+*.pem
+.env
+.env.*
+
+# Deployment artifacts
+*.zip
+pub.log
+deploy.log
+verify.log
+plan.json
+created.json
+
+# OS
+.DS_Store
+Thumbs.db
