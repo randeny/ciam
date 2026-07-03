@@ -118,6 +118,32 @@ dotnet publish -c Release -o ./publish
 # then zip-deploy ./publish to your App Service
 ```
 
+## Important note on CORS configuration
+
+The native-auth SPA calls the Entra External ID native authentication endpoints (for example `/oauth2/v2.0/initiate`) **directly from the browser**. Because the SPA is served from a different origin than the authentication host (for example the app runs on `http://localhost:5000` locally, or on your web server, while the auth endpoints live on `<native-auth-host>`), these are cross-origin requests and the browser enforces CORS. Entra External ID native-auth endpoints only return an `Access-Control-Allow-Origin` header for origins that are explicitly registered on the SPA app registration. If the requesting origin is not allowed, the browser discards the response and the SPA sign-in fails with **"Failed to fetch"**, even though the network tab may show the request returned `200 (OK)`. The console shows an error similar to:
+
+```
+Access to fetch at 'https://<native-auth-host>/<tenant-id>/oauth2/v2.0/initiate' from origin 'http://localhost:5000'
+has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+![Browser CORS error on the native-auth initiate endpoint](images/cors-error.png)
+
+### Using Azure Front Door as a CORS-rewriting proxy
+
+When you front the application with a **custom domain**, you can route the native-auth calls through **Azure Front Door (AFD)** and have AFD act as a reverse proxy that rewrites the CORS headers. AFD sits in front of the Entra External ID custom domain (`<native-auth-host>`) and, using a rule set, injects the CORS response headers the browser requires so the sign-in succeeds without changing the SPA or the client app.
+
+The rule matches on the upstream request URL and the browser's `Origin`, then overwrites the response headers on the way back:
+
+- **Condition** — `Request URL` *Contains* `<native-auth-host>` **AND** `Request header` `Origin` *Contains* the allowed custom-domain origin (for example `https://ciam.mydom.me`).
+- **Action** — Overwrite `Access-Control-Allow-Origin` with the custom-domain origin, and overwrite `Access-Control-Allow-Credentials` with `true`.
+
+![AFD rule condition matching the request URL and Origin header](images/afd-rule-origin-condition.png)
+
+![AFD rule overwriting the Access-Control-Allow-Origin and Access-Control-Allow-Credentials response headers](images/afd-rule-cors-rewrite.png)
+
+Additionally, the OBO client sends a **special header** that AFD can key off to **remove the request `Origin` header** before the call reaches the upstream Entra endpoint. Stripping `Origin` makes the upstream treat the request as non-CORS (same-origin), and AFD then adds the appropriate CORS response headers on the way back to the browser — giving you full control of the CORS contract at the edge.
+
 ## Requirements
 
 - .NET 9 SDK
