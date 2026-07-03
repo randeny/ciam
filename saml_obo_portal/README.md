@@ -10,17 +10,25 @@ A self-contained ASP.NET Core (.NET 9) application that demonstrates **Microsoft
 
 ## Architecture
 
-```
-Browser SPA ──(native auth)──► Entra External ID (<custom url>)
-     │  access token
-     ▼
-POST /portallogon/sso ──► Backend (OBO confidential client)
-                              │ jwt-bearer + saml2 token type
-                              ▼
-                         SAML assertion ──► auto-POST ──► /samlapp/acs (SAML SP)
-                                                              │ validate + PRG
-                                                              ▼
-                                                        /samlapp/result/{id}
+```mermaid
+sequenceDiagram
+    autonumber
+    participant SPA as Browser SPA
+    participant Entra as Entra External ID<br/>(&lt;custom url&gt;)
+    participant Backend as Backend<br/>(OBO confidential client)
+    participant SP as SAML SP
+
+    SPA->>Entra: Native auth (username / password / OTP)
+    Entra-->>SPA: Access token
+
+    SPA->>Backend: POST /portallogon/sso (access token)
+    Backend->>Entra: OBO exchange<br/>(jwt-bearer + requested_token_type=saml2)
+    Entra-->>Backend: SAML assertion
+    Backend-->>SPA: Auto-POST form (&lt;samlp:Response&gt;)
+
+    SPA->>SP: POST /samlapp/acs
+    Note over SP: Validate signature, audience,<br/>lifetime, replay
+    SP-->>SPA: Redirect (PRG) → /samlapp/result/{id}
 ```
 
 ## Endpoints
