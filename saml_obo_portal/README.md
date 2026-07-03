@@ -4,14 +4,14 @@ A self-contained ASP.NET Core (.NET 9) application that demonstrates **Microsoft
 
 ## What it demonstrates
 
-1. **Native auth SPA** — A pre-built browser client signs the user in directly against Entra External ID (`<native-auth-host>`) using the native authentication flow (username / password / OTP), with no redirect to a hosted login page.
+1. **Native auth SPA** — A pre-built browser client signs the user in directly against Entra External ID (`<custom url>`) using the native authentication flow (username / password / OTP), with no redirect to a hosted login page.
 2. **Backend OBO exchange** — The SPA posts the resulting access token to the backend, which performs a confidential-client OBO exchange requesting `requested_token_type=urn:ietf:params:oauth:token-type:saml2`.
 3. **SAML SSO** — The backend wraps the returned SAML assertion in a `<samlp:Response>` and auto-POSTs it to the SAML Assertion Consumer Service (ACS). The SAML SP validates signature, audience, lifetime, and replay, then shows the result.
 
 ## Architecture
 
 ```
-Browser SPA ──(native auth)──► Entra External ID (<native-auth-host>)
+Browser SPA ──(native auth)──► Entra External ID (<custom url>)
      │  access token
      ▼
 POST /portallogon/sso ──► Backend (OBO confidential client)
@@ -120,10 +120,10 @@ dotnet publish -c Release -o ./publish
 
 ## Important note on CORS configuration
 
-The native-auth SPA calls the Entra External ID native authentication endpoints (for example `/oauth2/v2.0/initiate`) **directly from the browser**. Because the SPA is served from a different origin than the authentication host (for example the app runs on `http://localhost:5000` locally, or on your web server, while the auth endpoints live on `<native-auth-host>`), these are cross-origin requests and the browser enforces CORS. Entra External ID native-auth endpoints only return an `Access-Control-Allow-Origin` header for origins that are explicitly registered on the SPA app registration. If the requesting origin is not allowed, the browser discards the response and the SPA sign-in fails with **"Failed to fetch"**, even though the network tab may show the request returned `200 (OK)`. The console shows an error similar to:
+The native-auth SPA calls the Entra External ID native authentication endpoints (for example `/oauth2/v2.0/initiate`) **directly from the browser**. Because the SPA is served from a different origin than the authentication host (for example the app runs on `http://localhost:5000` locally, or on your web server, while the auth endpoints live on `<custom url>`), these are cross-origin requests and the browser enforces CORS. Entra External ID native-auth endpoints only return an `Access-Control-Allow-Origin` header for origins that are explicitly registered on the SPA app registration. If the requesting origin is not allowed, the browser discards the response and the SPA sign-in fails with **"Failed to fetch"**, even though the network tab may show the request returned `200 (OK)`. The console shows an error similar to:
 
 ```
-Access to fetch at 'https://<native-auth-host>/<tenant-id>/oauth2/v2.0/initiate' from origin 'http://localhost:5000'
+Access to fetch at 'https://<custom url>/<tenant-id>/oauth2/v2.0/initiate' from origin 'http://localhost:5000'
 has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
 ```
 
@@ -131,11 +131,11 @@ has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is pres
 
 ### Using Azure Front Door as a CORS-rewriting proxy
 
-When you front the application with a **custom domain**, you can route the native-auth calls through **Azure Front Door (AFD)** and have AFD act as a reverse proxy that rewrites the CORS headers. AFD sits in front of the Entra External ID custom domain (`<native-auth-host>`) and, using a rule set, injects the CORS response headers the browser requires so the sign-in succeeds without changing the SPA or the client app.
+When you front the application with a **custom domain**, you can route the native-auth calls through **Azure Front Door (AFD)** and have AFD act as a reverse proxy that rewrites the CORS headers. AFD sits in front of the Entra External ID custom domain (`<custom url>`) and, using a rule set, injects the CORS response headers the browser requires so the sign-in succeeds without changing the SPA or the client app.
 
 The rule matches on the upstream request URL and the browser's `Origin`, then overwrites the response headers on the way back:
 
-- **Condition** — `Request URL` *Contains* `<native-auth-host>` **AND** `Request header` `Origin` *Contains* the allowed custom-domain origin (for example `https://ciam.mydom.me`).
+- **Condition** — `Request URL` *Contains* `<custom url>` **AND** `Request header` `Origin` *Contains* the allowed custom-domain origin (for example `https://<custom url>`).
 - **Action** — Overwrite `Access-Control-Allow-Origin` with the custom-domain origin, and overwrite `Access-Control-Allow-Credentials` with `true`.
 
 ![AFD rule condition matching the request URL and Origin header](images/afd-rule-origin-condition.png)
