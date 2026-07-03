@@ -71,7 +71,7 @@ Follow these steps to download, configure, and run the application from GitHub.
 
    ```bash
    git clone https://github.com/randeny/ciam.git
-   cd ciam
+   cd ciam\saml_obo_portal
    ```
 
 2. **Install the .NET 9 SDK** (if not already installed)
