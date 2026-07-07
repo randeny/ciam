@@ -63,6 +63,8 @@ setx PortalLogon__OboClientSecret "<your-obo-client-secret>"
 
 On Azure App Service, set the application setting `PortalLogon__OboClientSecret`.
 
+> **Production guidance:** For the purposes of this demo, the confidential-client credential (OBO client secret) is resolved from configuration and held **in memory** at runtime. In a production deployment, do **not** keep the client secret — or any other credential such as a signing/authentication **certificate** — in app settings, environment variables, or source. Store it in **Azure Key Vault** and access it via a managed identity (for example, using Key Vault references in App Service or the `Azure.Security.KeyVault` / `Azure.Identity` SDKs). Prefer **certificate-based** client credentials over shared secrets where possible, and rotate credentials regularly.
+
 ## Run locally
 
 ```bash
