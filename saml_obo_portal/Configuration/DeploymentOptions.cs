@@ -18,11 +18,11 @@ public sealed class PortalLogonOptions
 {
     public const string SectionName = "PortalLogon";
 
-    /// <summary>Tenant subdomain used to reach the native-auth host (e.g. "<tenant-subdomain>" -> <tenant-subdomain>.ciamlogin.com).</summary>
+    /// <summary>Tenant subdomain used to reach the native-auth host (e.g. "contoso" -> contoso.ciamlogin.com).</summary>
     public string TenantSubdomain { get; set; } = string.Empty;
 
-    /// <summary>Host used to reach the native-auth endpoints (e.g. "<native-auth-host>" custom domain).</summary>
-    public string NativeAuthHost { get; set; } = "<native-auth-host>";
+    /// <summary>Host used to reach the native-auth endpoints (e.g. a "login.contoso.com" custom domain).</summary>
+    public string NativeAuthHost { get; set; } = string.Empty;
 
     public string TenantId { get; set; } = string.Empty;
 
