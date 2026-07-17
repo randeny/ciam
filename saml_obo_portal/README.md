@@ -50,6 +50,13 @@ sequenceDiagram
 - `Configuration/DeploymentOptions.cs` — `Cors` and `PortalLogon` options
 - `wwwroot/portallogon-direct/` — pre-built SPA bundle
 
+## Solution components
+
+This single ASP.NET Core app is really two cooperating pieces:
+
+- **The portal / SPA application (required).** A browser single-page app (served from `wwwroot/portallogon-direct/`) backed by `PortalLogonController`. The SPA signs the user in directly against Entra External ID using native authentication (username / password / OTP, no redirect), then hands the resulting access token to the backend. The backend performs the confidential-client **On-Behalf-Of exchange** that turns that token into a **SAML 2.0 assertion** and auto-POSTs it onward. This is the heart of the demo and is always in play.
+- **The sample SAML application (optional).** A minimal SAML 2.0 **service provider** implemented by `SamlController` and the helpers in `Saml/`, exposed under `/samlapp` (`/acs`, `/result/{id}`, `/metadata`). It exists so the demo is self-contained: it receives the SAML assertion the OBO step produces, validates it (signature, audience, lifetime, replay) against the IdP federation metadata, and renders the decoded claims. In a real deployment you would point the OBO step at your *own* SAML application instead — so this SP is a convenient stand-in you can drop once you wire in the real one.
+
 ## Prerequisites
 
 Before you deploy, make sure you have all of the following. If you are new to Entra, do the [Entra External ID setup](#entra-external-id-setup-app-registrations) first — it produces most of the values you will paste into configuration.
