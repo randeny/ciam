@@ -30,3 +30,9 @@ created.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Large media (avoid accidental commits of new recordings)
+*.mp4
+*.mp3
+*.mov
+*.wav
