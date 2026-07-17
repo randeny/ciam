@@ -280,6 +280,116 @@ dotnet publish -c Release -o ./publish
 # then zip-deploy ./publish to your App Service
 ```
 
+See [Deploy the sample to Azure App Service (optional)](#deploy-the-sample-to-azure-app-service-optional) below for full, step-by-step instructions.
+
+## Deploy the sample to Azure App Service (optional)
+
+> **Optional.** Running the app [locally](#run-locally) is enough to try the end-to-end flow. Follow this section only if you want the sample reachable at a public HTTPS URL (which also makes the SAML ACS, native-auth, and CORS behavior representative of a real deployment). These steps deploy the **whole sample** — which includes the SAML service provider under `/samlapp` — as a single Azure App Service web app.
+
+### Prerequisites for this section
+
+- An **Azure subscription**.
+- The **Azure CLI** — install from <https://learn.microsoft.com/cli/azure/install-azure-cli>, then sign in:
+
+  ```bash
+  az login
+  az account set --subscription "<your-subscription-id-or-name>"
+  ```
+
+- The [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) (to publish the app).
+- Your completed [Entra External ID setup](#entra-external-id-setup-app-registrations) values, including the **OBO client secret**.
+
+Pick names/region and reuse them in the commands below (bash — for PowerShell, swap the `\` line-continuations for backticks):
+
+```bash
+RG="rg-saml-obo-demo"
+LOCATION="eastus"
+PLAN="plan-saml-obo-demo"
+APP="saml-obo-demo-$RANDOM"   # must be globally unique; becomes https://<APP>.azurewebsites.net
+```
+
+### Step 1 — Create the App Service (Linux, .NET 9)
+
+```bash
+az group create --name "$RG" --location "$LOCATION"
+
+az appservice plan create \
+  --name "$PLAN" --resource-group "$RG" \
+  --location "$LOCATION" --sku B1 --is-linux
+
+az webapp create \
+  --name "$APP" --resource-group "$RG" \
+  --plan "$PLAN" --runtime "DOTNETCORE:9.0"
+
+# Enforce HTTPS (the SAML POST and native-auth calls should never travel over http)
+az webapp update --name "$APP" --resource-group "$RG" --https-only true
+```
+
+Your portal base URL is now `https://<APP>.azurewebsites.net`. Use it consistently for every "portal base URL" value below.
+
+### Step 2 — Configure application settings
+
+Set every environment-specific value as an App Service application setting using the `Section__Key` convention (double underscore) instead of editing `appsettings.json`. **The OBO client secret must only be provided this way — never committed.**
+
+```bash
+BASE="https://$APP.azurewebsites.net"
+
+az webapp config appsettings set --name "$APP" --resource-group "$RG" --settings \
+  PortalLogon__TenantId="<tenant-id>" \
+  PortalLogon__NativeAuthHost="<native-auth-host>" \
+  PortalLogon__OboClientId="<app-B-client-id>" \
+  PortalLogon__OboScope="api://<app-B-client-id>/.default" \
+  PortalLogon__OboTokenUrl="https://<native-auth-host>/<tenant-id>/oauth2/v2.0/token" \
+  PortalLogon__AcsUrl="$BASE/samlapp/acs" \
+  PortalLogon__OboClientSecret="<your-obo-client-secret>" \
+  Saml__ServiceProviderEntityId="$BASE/samlapp" \
+  Saml__AssertionConsumerServiceUrl="$BASE/samlapp/acs" \
+  Saml__ExpectedAudience="<app-C-audience-uri, e.g. urn:example:ps-saml-app>" \
+  Saml__MetadataUrl="https://<native-auth-host>/<tenant-id>/federationmetadata/2007-06/federationmetadata.xml?appid=<app-C-client-id>" \
+  Cors__AllowedOrigins__0="$BASE" \
+  Cors__AllowedOrigins__1="https://<native-auth-host>"
+```
+
+> Keep `Saml__AssertionConsumerServiceUrl`, `PortalLogon__AcsUrl`, and the ACS path implied by `Saml__ServiceProviderEntityId` all pointing at `$BASE/samlapp/acs`. Array settings use zero-based `__index` keys (for example `Cors__AllowedOrigins__0`). For production, store `OboClientSecret` in **Azure Key Vault** and reference it here — see the [production guidance](#configuration) note.
+
+### Step 3 — Publish the app
+
+```bash
+cd saml_obo_portal
+dotnet publish -c Release -o ./publish
+
+# Zip-deploy the published output
+Compress-Archive -Path ./publish/* -DestinationPath ./publish.zip -Force   # PowerShell
+# (bash/macOS/Linux:  cd publish && zip -r ../publish.zip . && cd .. )
+
+az webapp deploy \
+  --name "$APP" --resource-group "$RG" \
+  --src-path ./publish.zip --type zip
+```
+
+### Step 4 — Wire the deployed URL back into Entra and the SPA
+
+Because the app is now on a new origin, update the pieces that reference it:
+
+1. **Native-auth SPA app registration (app A)** — add `https://<APP>.azurewebsites.net` as an allowed **SPA redirect URI / origin** so browser native-auth calls pass CORS (see [CORS configuration](#important-note-on-cors-configuration)).
+2. **SPA bundle** — rebuild/update `metadataUrl`, `clientId`, and `scope` for your tenant if you have not already (see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle)) and re-publish.
+3. **SAML application (app C)** — make sure its expected ACS / reply URL matches `https://<APP>.azurewebsites.net/samlapp/acs` and its audience matches `Saml__ExpectedAudience`.
+
+### Step 5 — Verify
+
+```bash
+# SP metadata should render with your deployed Entity ID and ACS URL
+curl -s "https://$APP.azurewebsites.net/samlapp/metadata"
+```
+
+Then open `https://<APP>.azurewebsites.net/portallogon-direct/` in a browser and complete a sign-in. The ACS info page at `/samlapp/acs` (GET) shows the effective SP configuration for quick troubleshooting.
+
+To tear everything down:
+
+```bash
+az group delete --name "$RG" --yes --no-wait
+```
+
 ## Important note on CORS configuration
 
 The native-auth SPA calls the Entra External ID native authentication endpoints (for example `/oauth2/v2.0/initiate`) **directly from the browser**. Because the SPA is served from a different origin than the authentication host (for example the app runs on `http://localhost:5000` locally, or on your web server, while the auth endpoints live on `<custom url>`), these are cross-origin requests and the browser enforces CORS. Entra External ID native-auth endpoints only return an `Access-Control-Allow-Origin` header for origins that are explicitly registered on the SPA app registration. If the requesting origin is not allowed, the browser discards the response and the SPA sign-in fails with **"Failed to fetch"**, even though the network tab may show the request returned `200 (OK)`. The console shows an error similar to:
