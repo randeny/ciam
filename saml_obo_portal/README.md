@@ -8,6 +8,29 @@ A self-contained ASP.NET Core (.NET 9) application that demonstrates **Microsoft
 2. **Backend OBO exchange** — The SPA posts the resulting access token to the backend, which performs a confidential-client OBO exchange requesting `requested_token_type=urn:ietf:params:oauth:token-type:saml2`.
 3. **SAML SSO** — The backend wraps the returned SAML assertion in a `<samlp:Response>` and auto-POSTs it to the SAML Assertion Consumer Service (ACS). The SAML SP validates signature, audience, lifetime, and replay, then shows the result.
 
+## Table of contents
+
+- [Architecture](#architecture)
+- [Endpoints](#endpoints)
+- [Project layout](#project-layout)
+- [Solution components](#solution-components)
+- [Prerequisites](#prerequisites)
+- [Entra External ID setup (app registrations)](#entra-external-id-setup-app-registrations)
+  - [The three identities at a glance](#the-three-identities-at-a-glance)
+  - [Step 1 — Register the SAML application (app C)](#step-1--register-the-saml-application-app-c)
+  - [Step 2 — Register the OBO API / confidential client (app B)](#step-2--register-the-obo-api--confidential-client-app-b)
+  - [Step 3 — Register the native-auth SPA (app A)](#step-3--register-the-native-auth-spa-app-a)
+  - [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle)
+  - [ID → configuration map](#id--configuration-map)
+- [Configuration](#configuration)
+  - [Values to update at deployment](#values-to-update-at-deployment)
+- [Run locally](#run-locally)
+  - [Setup instructions](#setup-instructions)
+- [Deploy the sample to Azure App Service (optional)](#deploy-the-sample-to-azure-app-service-optional)
+- [Important note on CORS configuration](#important-note-on-cors-configuration)
+- [Requirements](#requirements)
+- [Security notes](#security-notes)
+
 ## Architecture
 
 ```mermaid
