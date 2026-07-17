@@ -52,7 +52,29 @@ sequenceDiagram
 
 ## Configuration
 
-All non-secret settings live in `appsettings.json` (`Cors`, `Saml`, `PortalLogon`).
+All non-secret settings live in `appsettings.json` (`Cors`, `Saml`, `PortalLogon`). The file ships with **placeholder values** (e.g. `"<update your ... here, e.g. ...>"`) that you **must replace** with values for your own environment before running or deploying. Replace every placeholder — leaving the angle-bracket text in place will cause sign-in, OBO, or SAML validation to fail.
+
+### Values to update at deployment
+
+| Setting | What to set it to | Example |
+| --- | --- | --- |
+| `Cors:AllowedOrigins[0]` | Local dev frontend origin (http) | `http://localhost:5173` |
+| `Cors:AllowedOrigins[1]` | Local dev frontend origin (https) | `https://localhost:5173` |
+| `Cors:AllowedOrigins[2]` | Deployed portal base URL | `https://myportal.azurewebsites.net` |
+| `Cors:AllowedOrigins[3]` | CIAM native auth host URL | `https://login.mydomain.com` |
+| `Saml:ServiceProviderEntityId` | SAML service provider entity ID URL | `https://myportal.azurewebsites.net/samlapp` |
+| `Saml:AssertionConsumerServiceUrl` | SAML assertion consumer service (ACS) URL | `https://myportal.azurewebsites.net/samlapp/acs` |
+| `Saml:MetadataUrl` | Identity provider federation metadata URL | `https://mytenant.ciamlogin.com/<tenant-id>/federationmetadata/2007-06/federationmetadata.xml?appid=<app-id>` |
+| `PortalLogon:NativeAuthHost` | Custom domain for your CIAM native auth host | `login.mydomain.com` |
+| `PortalLogon:TenantId` | Tenant ID of your CIAM tenant | `12345678-1234-1234-1234-123456789abc` |
+| `PortalLogon:OboClientId` | Client ID of your CIAM app registration for the OBO flow | `12345678-1234-1234-1234-123456789abc` |
+| `PortalLogon:OboScope` | Scope for your CIAM app registration for the OBO flow | `api://12345678-1234-1234-1234-123456789abc/.default` |
+| `PortalLogon:OboTokenUrl` | OAuth 2.0 on-behalf-of token endpoint URL | `https://login.mydomain.com/<tenant-id>/oauth2/v2.0/token` |
+| `PortalLogon:AcsUrl` | SAML assertion consumer service (ACS) URL | `https://myportal.azurewebsites.net/samlapp/acs` |
+
+> Keep `Saml:AssertionConsumerServiceUrl`, `PortalLogon:AcsUrl`, and the ACS path in `Saml:ServiceProviderEntityId` consistent — they must all point at the same deployed `/samlapp/acs` endpoint. `Cors:AllowedOrigins[2]`, `Saml:ServiceProviderEntityId`, and the ACS URLs all share the same deployed portal base URL.
+
+When deploying to Azure App Service, override any of these per-environment values with application settings using the `Section__Key` convention (for example `PortalLogon__TenantId`) instead of editing the committed file.
 
 The **OBO client secret is NOT stored in source.** Provide it at runtime via configuration override:
 
@@ -92,7 +114,11 @@ Follow these steps to download, configure, and run the application from GitHub.
    dotnet --version
    ```
 
-3. **Provide the OBO client secret** (never commit this value)
+3. **Update `appsettings.json` placeholders**
+
+   Open `saml_obo_portal/appsettings.json` and replace every `"<update your ... here, e.g. ...>"` placeholder in the `Cors`, `Saml`, and `PortalLogon` sections with the values for your environment. See the [Values to update at deployment](#values-to-update-at-deployment) table above.
+
+4. **Provide the OBO client secret** (never commit this value)
 
    ```bash
    # macOS / Linux
@@ -102,20 +128,20 @@ Follow these steps to download, configure, and run the application from GitHub.
    $env:PortalLogon__OboClientSecret = "<your-obo-client-secret>"
    ```
 
-4. **Restore and build**
+5. **Restore and build**
 
    ```bash
    dotnet restore
    dotnet build
    ```
 
-5. **Run the application**
+6. **Run the application**
 
    ```bash
    dotnet run
    ```
 
-6. **Open the portal** in a browser:
+7. **Open the portal** in a browser:
 
    ```
    http://localhost:5000/portallogon-direct/
