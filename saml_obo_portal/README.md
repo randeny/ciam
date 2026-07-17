@@ -138,9 +138,9 @@ This is the public client the browser uses to sign the user in without a redirec
 >
 > ```js
 > const ge = {
->   clientId: "<app-A-spa-client-id>",                  // app A (native-auth SPA)
+>   clientId: "<app-A-spa-client-id>",                                             // app A (native-auth SPA)
 >   metadataUrl: "https://<native-auth-host>/<tenant-id>/v2.0/.well-known/openid-configuration",
->   scope: "api://<app-B-client-id>/access openid offline_access",             // app B's exposed scope
+>   scope: "api://<app-B-client-id>/access openid offline_access",                 // app B's exposed scope
 >   challengeType: "password oob redirect",
 >   ssoEndpoint: "/portallogon/sso"
 > };
