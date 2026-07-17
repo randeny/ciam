@@ -100,7 +100,7 @@ public sealed class SamlController : ControllerBase
         return new ContentResult
         {
             Content = xml,
-            ContentType = "application/samlmetadata+xml",
+            ContentType = "application/samlmetadata+xml; charset=utf-8",
             StatusCode = StatusCodes.Status200OK,
         };
     }
@@ -133,7 +133,13 @@ public sealed class SamlController : ControllerBase
             Encoding = new UTF8Encoding(false),
         };
 
-        using var sw = new StringWriter();
+        // NOTE: XmlWriter takes the XML declaration's encoding from the underlying
+        // writer's Encoding, NOT from XmlWriterSettings.Encoding (that is ignored for
+        // TextWriter targets). A plain StringWriter reports UTF-16, which would emit
+        // `encoding="utf-16"` even though ASP.NET Core serializes the response body as
+        // UTF-8 — breaking strict parsers. Use a UTF-8 reporting writer so the declared
+        // encoding matches the bytes actually served.
+        using var sw = new Utf8StringWriter();
         using (var writer = XmlWriter.Create(sw, settings))
         {
             writer.WriteStartDocument();
@@ -272,4 +278,14 @@ public sealed class SamlController : ControllerBase
     }
 
     private static void AppendFooter(StringBuilder sb) => sb.Append("</body></html>");
+
+    /// <summary>
+    /// StringWriter that reports UTF-8 so <see cref="XmlWriter"/> emits
+    /// <c>encoding="utf-8"</c> in the XML declaration, matching the UTF-8 bytes
+    /// ASP.NET Core actually writes to the response.
+    /// </summary>
+    private sealed class Utf8StringWriter : StringWriter
+    {
+        public override Encoding Encoding => new UTF8Encoding(false);
+    }
 }
