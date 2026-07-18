@@ -254,72 +254,17 @@ dotnet run
 
 ### Setup instructions
 
-Follow these steps to download, configure, and run the application from GitHub. If you are new to Entra, complete the [Prerequisites](#prerequisites) and [Entra External ID setup](#entra-external-id-setup-app-registrations) first — they produce the IDs, URLs, and secret used below.
+An ordered checklist tying the sections above together. New to Entra? Do the [Prerequisites](#prerequisites) and [Entra External ID setup](#entra-external-id-setup-app-registrations) first.
 
-1. **Clone the repository**
+1. **Clone the repo** — `git clone https://github.com/randeny/ciam.git` then `cd ciam\saml_obo_portal`.
+2. **Install the .NET 9 SDK** — see [Prerequisites](#prerequisites).
+3. **Create the three app registrations** — [Entra External ID setup](#entra-external-id-setup-app-registrations), then collect values from the [ID → configuration map](#id--configuration-map).
+4. **Configure the SPA** — set `clientId`, `metadataUrl`, and `scope` in [`config.js`](#updating-the-pre-built-spa-bundle).
+5. **Configure the backend** — replace the placeholders in `appsettings.json` per [Values to update at deployment](#values-to-update-at-deployment).
+6. **Provide the OBO client secret** — via `PortalLogon__OboClientSecret`, never committed (see [Configuration](#configuration)).
+7. **Run it** — [Run locally](#run-locally).
 
-   ```bash
-   git clone https://github.com/randeny/ciam.git
-   cd ciam\saml_obo_portal
-   ```
-
-2. **Install the .NET 9 SDK** (if not already installed)
-
-   Download from https://dotnet.microsoft.com/download/dotnet/9.0 and verify:
-
-   ```bash
-   dotnet --version
-   ```
-
-3. **Create the Entra app registrations**
-
-   Complete [Entra External ID setup](#entra-external-id-setup-app-registrations) (three app registrations) and collect the values from the [ID → configuration map](#id--configuration-map).
-
-4. **Point the SPA bundle at your tenant**
-
-   Update `clientId`, `metadataUrl`, and `scope` in `config.js` — see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle).
-
-5. **Update `appsettings.json` placeholders**
-
-   Open `saml_obo_portal/appsettings.json` and replace every `"<update your ... here, e.g. ...>"` placeholder in the `Cors`, `Saml`, and `PortalLogon` sections with the values for your environment. See the [Values to update at deployment](#values-to-update-at-deployment) table above.
-
-6. **Provide the OBO client secret** (never commit this value)
-
-   ```bash
-   # macOS / Linux
-   export PortalLogon__OboClientSecret="<your-obo-client-secret>"
-
-   # Windows (PowerShell)
-   $env:PortalLogon__OboClientSecret = "<your-obo-client-secret>"
-   ```
-
-7. **Restore and build**
-
-   ```bash
-   dotnet restore
-   dotnet build
-   ```
-
-8. **Run the application**
-
-   ```bash
-   dotnet run
-   ```
-
-9. **Open the portal** in a browser:
-
-   ```
-   http://localhost:5000/portallogon-direct/
-   ```
-
-To deploy to Azure App Service instead, publish the app and set the `PortalLogon__OboClientSecret` application setting on the target web app:
-
-```bash
-dotnet publish -c Release -o ./publish
-# then zip-deploy ./publish to your App Service
-```
-
-See [Deploy the sample to Azure App Service (optional)](#deploy-the-sample-to-azure-app-service-optional) below for full, step-by-step instructions.
+To host it publicly instead, see [Deploy the sample to Azure App Service](#deploy-the-sample-to-azure-app-service-optional).
 
 ## Deploy the sample to Azure App Service (optional)
 
