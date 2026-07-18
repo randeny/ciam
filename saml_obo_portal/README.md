@@ -136,12 +136,9 @@ This is the middle-tier confidential client. It is **both** the API the SPA asks
    - Set the **Application ID URI** to `api://<app-B-client-id>`.
    - **Add a scope** named `access` (admin-consent enough). The SPA will request `api://<app-B-client-id>/access`.
 4. **Certificates & secrets → New client secret**. Copy the secret **value** immediately → this becomes `PortalLogon__OboClientSecret` (provided at runtime, **never committed** — see [Configuration](#configuration)).
-5. **Point the OBO exchange at the SAML app (app C) as its target resource.** "The OBO target" just means *the resource the OBO exchange requests a token for* — here the SAML SP (app **C**) — so Entra returns a **SAML2 assertion** instead of a JWT. Concretely:
-   - On app **B**, go to **API permissions → Add a permission → APIs my organization uses**, select app **C**, add its exposed permission, and click **Grant admin consent**. This authorizes app **B** to request a token *for* app **C**.
-   - Make sure app **C** is configured for **SAML SSO** and carries the Application ID URI / audience you set in Step 1, so the token endpoint can mint a SAML2 assertion for it.
-   - At runtime the confidential client (app **B**) then sends `requested_token_type=urn:ietf:params:oauth:token-type:saml2` in the OBO call (see `Controllers/PortalLogonController.cs`).
+5. **Let this app request a SAML token for the SAML app (app C).** In app **B**, go to **API permissions → Add a permission → APIs my organization uses**, pick app **C**, add its permission, then click **Grant admin consent**. That's what lets the OBO exchange return a **SAML assertion** for app **C** instead of a normal JWT.
 
-   > **Note:** Issuing a **SAML2 assertion via OBO** is a specialized capability. If the token endpoint returns a JWT or rejects `requested_token_type`, confirm with your tenant administrator (or Microsoft) that SAML2-token issuance through OBO is enabled for your External ID tenant.
+   > **Note:** Getting a SAML assertion from OBO is a special capability. If the token endpoint returns a JWT (or an error), ask your tenant admin / Microsoft to confirm it's enabled for your tenant.
 6. Record the token endpoint for `PortalLogon:OboTokenUrl`:
 
    ```
