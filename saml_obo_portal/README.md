@@ -112,7 +112,7 @@ This demo relies on **three** app registrations in your External ID tenant. Crea
 The SAML assertion has to be issued *for* something. That "something" is a SAML app registration whose **identifier / audience URI** the demo validates against (`Saml:ExpectedAudience`, shipped as `urn:example:ps-saml-app`).
 
 1. In the Entra admin center of your External ID tenant, go to **Identity → Applications → App registrations → New registration**.
-2. Name it e.g. `saml-obo-demo-sp`. Leave redirect URI blank. Register.
+2. Name it e.g. `saml-obo-demo-sp`. For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant — your External ID tenant). Leave redirect URI blank. Register.
 3. Open **Expose an API → Application ID URI** and set it to a stable URN that will be the **SAML audience**, e.g. `urn:example:ps-saml-app`. Save. (Use this exact value for `Saml:ExpectedAudience`, or change both together.)
 4. Under **Manage → Authentication** (or the app's SAML/SSO configuration), record the **Application (client) ID** — you will need it for the metadata URL's `appid` query parameter.
 5. Build the **federation metadata URL** for `Saml:MetadataUrl`:
@@ -129,13 +129,18 @@ The SAML assertion has to be issued *for* something. That "something" is a SAML 
 
 This is the middle-tier confidential client. It is **both** the API the SPA asks for a token *and* the client that performs the OBO exchange.
 
-1. **App registrations → New registration**. Name it e.g. `saml-obo-demo-api`. Register.
+1. **App registrations → New registration**. Name it e.g. `saml-obo-demo-api`. For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant). Register.
 2. Copy the **Application (client) ID** → this is `PortalLogon:OboClientId`.
 3. **Expose an API**:
    - Set the **Application ID URI** to `api://<app-B-client-id>`.
    - **Add a scope** named `access` (admin-consent enough). The SPA will request `api://<app-B-client-id>/access`.
 4. **Certificates & secrets → New client secret**. Copy the secret **value** immediately → this becomes `PortalLogon__OboClientSecret` (provided at runtime, **never committed** — see [Configuration](#configuration)).
-5. Configure the OBO target so the exchange returns a **SAML2 token** for app **C** (the SAML SP). This is what lets the confidential client request `requested_token_type=urn:ietf:params:oauth:token-type:saml2` (see `Controllers/PortalLogonController.cs`). Grant this app permission to the SAML app / add it as an authorized client as required by your tenant.
+5. **Point the OBO exchange at the SAML app (app C) as its target resource.** "The OBO target" just means *the resource the OBO exchange requests a token for* — here the SAML SP (app **C**) — so Entra returns a **SAML2 assertion** instead of a JWT. Concretely:
+   - On app **B**, go to **API permissions → Add a permission → APIs my organization uses**, select app **C**, add its exposed permission, and click **Grant admin consent**. This authorizes app **B** to request a token *for* app **C**.
+   - Make sure app **C** is configured for **SAML SSO** and carries the Application ID URI / audience you set in Step 1, so the token endpoint can mint a SAML2 assertion for it.
+   - At runtime the confidential client (app **B**) then sends `requested_token_type=urn:ietf:params:oauth:token-type:saml2` in the OBO call (see `Controllers/PortalLogonController.cs`).
+
+   > **Note:** Issuing a **SAML2 assertion via OBO** is a specialized capability. If the token endpoint returns a JWT or rejects `requested_token_type`, confirm with your tenant administrator (or Microsoft) that SAML2-token issuance through OBO is enabled for your External ID tenant.
 6. Record the token endpoint for `PortalLogon:OboTokenUrl`:
 
    ```
@@ -150,15 +155,17 @@ This is the middle-tier confidential client. It is **both** the API the SPA asks
 
 This is the public client the browser uses to sign the user in without a redirect.
 
-1. **App registrations → New registration**. Name it e.g. `saml-obo-demo-spa`.
+1. **App registrations → New registration**. Name it e.g. `saml-obo-demo-spa`. For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant).
 2. Under **Authentication**, add a **Single-page application** platform and enable settings required for **native authentication** (enable public client / native auth for the app). Add your portal origin(s) as redirect URIs / SPA origins so CORS succeeds — the same origins you list in `Cors:AllowedOrigins`.
-3. **API permissions → Add a permission → My APIs →** select app **B** and add the `access` delegated scope. Click **Grant admin consent**.
+3. **API permissions → Add a permission →** select the **APIs my organization uses** tab (use **My APIs** instead only if you registered app **B** under the same account and it appears there) → search for and select app **B** → **Delegated permissions** → add the `access` scope. Click **Grant admin consent**.
 4. Copy the **Application (client) ID** → this is the SPA's `clientId` (baked into the bundle, see below).
 5. Note your tenant's OpenID metadata URL for the SPA's `metadataUrl`:
 
    ```
    https://<native-auth-host>/<tenant-id>/v2.0/.well-known/openid-configuration
    ```
+
+   > ⚠️ **This value goes into the SPA bundle JS, _not_ `appsettings.json`.** `clientId`, `metadataUrl`, and `scope` are all baked into the minified bundle — see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle).
 
 - Reference: [Native authentication](https://learn.microsoft.com/entra/external-id/customers/concept-native-authentication).
 
@@ -177,6 +184,8 @@ This is the public client the browser uses to sign the user in without a redirec
 > ```
 >
 > These are **not** read from `appsettings.json`. To point the SPA at *your* tenant you must replace `clientId`, `metadataUrl`, and `scope` with your app **A** client ID, your tenant metadata URL, and your app **B** scope. The SPA **source is not included in this repository**, so you must either rebuild the SPA from its own source with your values, or (for a quick local test only) edit the three literals directly in the minified bundle. Plan to rebuild for any real deployment.
+>
+> **Avoiding hard-coded JS (recommended for real use).** Editing minified literals is brittle. A cleaner alternative is to externalize the three values instead of touching the bundle: serve a small `config.js` (or JSON) from `wwwroot` — for example `window.__APP_CONFIG__ = { clientId, metadataUrl, scope }` — load it *before* the bundle, and have the SPA read from it. Each environment can then supply its own values (even generated at startup from App Service settings) without rebuilding or hand-editing minified code.
 
 ### ID → configuration map
 
@@ -430,6 +439,13 @@ has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is pres
 ```
 
 ![Browser CORS error on the native-auth initiate endpoint](images/cors-error.png)
+
+### Local development and CORS
+
+When you run the app locally (`http://localhost:5000/portallogon-direct/`), the browser still calls the Entra native-auth endpoints cross-origin, so the same CORS rules apply:
+
+1. **Register your local origin.** Add `http://localhost:5000` (and `https://localhost:5001` if you serve over HTTPS) as an **SPA redirect URI / origin** on the **native-auth SPA app registration (app A)** — see [Step 3 §2](#step-3--register-the-native-auth-spa-app-a). This is the first thing to check when you hit the CORS error above.
+2. **Important limitation.** Entra External ID native-auth endpoints typically only emit CORS headers for origins served through a **custom domain**. A raw `*.ciamlogin.com` host may **not** return an `Access-Control-Allow-Origin` header for a `localhost` origin at all — in which case local sign-in cannot succeed no matter which origins you register, and you must front the tenant with a **custom domain + Azure Front Door** (next section) even for testing. If sign-in still fails from `localhost` after registering the origin, this is the most likely cause.
 
 ### Using Azure Front Door as a CORS-rewriting proxy
 
