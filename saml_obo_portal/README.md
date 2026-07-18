@@ -71,7 +71,8 @@ sequenceDiagram
 - `Controllers/SamlController.cs` — SAML ACS, result, and metadata endpoints
 - `Saml/` — SAML response processing, federation-metadata parsing, replay cache, result store
 - `Configuration/DeploymentOptions.cs` — `Cors` and `PortalLogon` options
-- `wwwroot/portallogon-direct/` — pre-built SPA bundle
+- `wwwroot/portallogon-direct/` — pre-built SPA bundle (`assets/*.js`), served via `index.html`
+- `wwwroot/portallogon-direct/config.js` — runtime SPA settings (`clientId`, `metadataUrl`, `scope`, …) loaded into `window.__APP_CONFIG__`; edited per environment instead of the minified bundle
 
 ## Solution components
 
@@ -165,27 +166,27 @@ This is the public client the browser uses to sign the user in without a redirec
    https://<native-auth-host>/<tenant-id>/v2.0/.well-known/openid-configuration
    ```
 
-   > ⚠️ **This value goes into the SPA bundle JS, _not_ `appsettings.json`.** `clientId`, `metadataUrl`, and `scope` are all baked into the minified bundle — see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle).
+   > ⚠️ **This value goes into `config.js`, _not_ `appsettings.json`.** `clientId`, `metadataUrl`, and `scope` are all set in `wwwroot/portallogon-direct/config.js` — see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle).
 
 - Reference: [Native authentication](https://learn.microsoft.com/entra/external-id/customers/concept-native-authentication).
 
 ### Updating the pre-built SPA bundle
 
-> **Important for novices:** the SPA in `wwwroot/portallogon-direct/` is a **pre-built JavaScript bundle** with a specific tenant's values **hard-coded** inside the minified `assets/*.js`. The shipped bundle contains:
+> **Important for novices:** the SPA in `wwwroot/portallogon-direct/` is a **pre-built JavaScript bundle**, but you **do not need to edit the minified `assets/*.js`**. Its per-tenant values are supplied at runtime from **`wwwroot/portallogon-direct/config.js`**, which `index.html` loads *before* the bundle and which exposes them on `window.__APP_CONFIG__`. Open `config.js` and replace the placeholders:
 >
 > ```js
-> const ge = {
+> window.__APP_CONFIG__ = {
 >   clientId: "<app-A-spa-client-id>",                                             // app A (native-auth SPA)
 >   metadataUrl: "https://<native-auth-host>/<tenant-id>/v2.0/.well-known/openid-configuration",
 >   scope: "api://<app-B-client-id>/access openid offline_access",                 // app B's exposed scope
 >   challengeType: "password oob redirect",
->   ssoEndpoint: "/portallogon/sso"
+>   ssoEndpoint: "/portallogon/sso"                                                // usually leave as-is
 > };
 > ```
 >
-> These are **not** read from `appsettings.json`. To point the SPA at *your* tenant you must replace `clientId`, `metadataUrl`, and `scope` with your app **A** client ID, your tenant metadata URL, and your app **B** scope. The SPA **source is not included in this repository**, so you must either rebuild the SPA from its own source with your values, or (for a quick local test only) edit the three literals directly in the minified bundle. Plan to rebuild for any real deployment.
+> These are **not** read from `appsettings.json`. The bundle merges `window.__APP_CONFIG__` over its built-in defaults, so any key you leave unset falls back to the default. Because `config.js` is a plain static file, each environment can supply its own values — or generate the file at deploy time from App Service settings — **without rebuilding or hand-editing the minified bundle**.
 >
-> **Avoiding hard-coded JS (recommended for real use).** Editing minified literals is brittle. A cleaner alternative is to externalize the three values instead of touching the bundle: serve a small `config.js` (or JSON) from `wwwroot` — for example `window.__APP_CONFIG__ = { clientId, metadataUrl, scope }` — load it *before* the bundle, and have the SPA read from it. Each environment can then supply its own values (even generated at startup from App Service settings) without rebuilding or hand-editing minified code.
+> The SPA **source is not included in this repository**. `config.js` covers the tenant/app values; if you need to change SPA behavior beyond those, rebuild the SPA from its own source.
 
 ### ID → configuration map
 
@@ -193,9 +194,9 @@ After completing steps 1–3, you will have collected the following. Paste each 
 
 | Value you collected | Goes into | Where |
 | --- | --- | --- |
-| App A (SPA) client ID | SPA `clientId` | bundle JS |
-| Tenant OpenID metadata URL | SPA `metadataUrl` | bundle JS |
-| `api://<app-B>/access …` | SPA `scope` | bundle JS |
+| App A (SPA) client ID | SPA `clientId` | `config.js` |
+| Tenant OpenID metadata URL | SPA `metadataUrl` | `config.js` |
+| `api://<app-B>/access …` | SPA `scope` | `config.js` |
 | App B client ID | `PortalLogon:OboClientId` | `appsettings.json` |
 | App B client secret | `PortalLogon__OboClientSecret` | env var / App Service setting |
 | `api://<app-B>/.default` | `PortalLogon:OboScope` | `appsettings.json` |
@@ -209,7 +210,9 @@ After completing steps 1–3, you will have collected the following. Paste each 
 
 ## Configuration
 
-All non-secret settings live in `appsettings.json` (`Cors`, `Saml`, `PortalLogon`). The file ships with **placeholder values** (e.g. `"<update your ... here, e.g. ...>"`) that you **must replace** with values for your own environment before running or deploying. Replace every placeholder — leaving the angle-bracket text in place will cause sign-in, OBO, or SAML validation to fail.
+All non-secret **backend** settings live in `appsettings.json` (`Cors`, `Saml`, `PortalLogon`). The file ships with **placeholder values** (e.g. `"<update your ... here, e.g. ...>"`) that you **must replace** with values for your own environment before running or deploying. Replace every placeholder — leaving the angle-bracket text in place will cause sign-in, OBO, or SAML validation to fail.
+
+> **SPA (browser) settings are separate.** The native-auth SPA's `clientId`, `metadataUrl`, and `scope` are **not** in `appsettings.json` — they live in `wwwroot/portallogon-direct/config.js` (`window.__APP_CONFIG__`). Update that file per environment too; see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle).
 
 ### Values to update at deployment
 
@@ -277,7 +280,7 @@ Follow these steps to download, configure, and run the application from GitHub. 
 
 4. **Point the SPA bundle at your tenant**
 
-   Update `clientId`, `metadataUrl`, and `scope` in the pre-built SPA — see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle).
+   Update `clientId`, `metadataUrl`, and `scope` in `config.js` — see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle).
 
 5. **Update `appsettings.json` placeholders**
 
@@ -411,7 +414,7 @@ az webapp deploy \
 Because the app is now on a new origin, update the pieces that reference it:
 
 1. **Native-auth SPA app registration (app A)** — add `https://<APP>.azurewebsites.net` as an allowed **SPA redirect URI / origin** so browser native-auth calls pass CORS (see [CORS configuration](#important-note-on-cors-configuration)).
-2. **SPA bundle** — rebuild/update `metadataUrl`, `clientId`, and `scope` for your tenant if you have not already (see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle)) and re-publish.
+2. **SPA config** — update `metadataUrl`, `clientId`, and `scope` in `config.js` for your tenant if you have not already (see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle)) and re-publish.
 3. **SAML application (app C)** — make sure its expected ACS / reply URL matches `https://<APP>.azurewebsites.net/samlapp/acs` and its audience matches `Saml__ExpectedAudience`.
 
 ### Step 5 — Verify
