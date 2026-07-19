@@ -28,6 +28,7 @@ A self-contained ASP.NET Core (.NET 9) application that demonstrates **Microsoft
   - [Setup instructions](#setup-instructions)
 - [Deploy the sample to Azure App Service (optional)](#deploy-the-sample-to-azure-app-service-optional)
 - [Important note on CORS configuration](#important-note-on-cors-configuration)
+- [Troubleshooting](#troubleshooting)
 - [Requirements](#requirements)
 - [Security notes](#security-notes)
 
@@ -91,7 +92,7 @@ Before you deploy, make sure you have all of the following. If you are new to En
 | 2 | A **Microsoft Entra External ID (CIAM) tenant** | Create one from **Microsoft Entra admin center → Identity → External Identities → create an external tenant**. This is *not* the same as a normal workforce tenant. |
 | 3 | Permission to create app registrations | You need the **Application Administrator** (or **Global Administrator**) role in that tenant to register apps and grant admin consent. |
 | 4 | The **.NET 9 SDK** | Download from <https://dotnet.microsoft.com/download/dotnet/9.0>. Verify with `dotnet --version`. |
-| 5 | A code editor | Visual Studio 2022, VS Code, or Rider. |
+| 5 | A code editor | Visual Studio 2022 or later, VS Code, or Rider. |
 | 6 | (Optional) A **custom domain** for the tenant | Native auth is called from the browser and is subject to CORS — a custom domain plus Azure Front Door is the recommended way to satisfy CORS in production. See [CORS configuration](#important-note-on-cors-configuration). |
 
 ## Entra External ID setup (app registrations)
@@ -406,6 +407,30 @@ The rule matches on the upstream request URL and the browser's `Origin`, then ov
 ![AFD rule overwriting the Access-Control-Allow-Origin and Access-Control-Allow-Credentials response headers](images/afd-rule-cors-rewrite.png)
 
 Additionally, the OBO client sends a **special header** that AFD can key off to **remove the request `Origin` header** before the call reaches the upstream Entra endpoint. Stripping `Origin` makes the upstream treat the request as non-CORS (same-origin), and AFD then adds the appropriate CORS response headers on the way back to the browser — giving you full control of the CORS contract at the edge.
+
+## Troubleshooting
+
+### `AADSTS65001` — OBO exchange fails with `consent_required`
+
+If the OBO step returns:
+
+```
+OBO exchange failed
+400: invalid_grant
+AADSTS65001: The user or administrator has not consented to use the application
+with ID '<app-B-client-id>' named 'SAML-OBO-demo-api'.
+suberror: consent_required
+```
+
+the sign-in and native-auth calls are working — the failure is purely a **consent** problem on the OBO API (app **B**). Admin consent has not been recorded for the delegated permission the SPA (app **A**) uses to call app **B**, and/or for app **B**'s permission to request a SAML token from the SAML app (app **C**). Fix it by granting consent in both places:
+
+1. **Consent for A → B (the SPA calling the OBO API).** In the **native-auth SPA app registration (app A)**, go to **API permissions**, confirm the delegated `access` scope on app **B** is listed (see [Step 3 §3](#step-3--register-the-native-auth-spa-app-a)), then click **Grant admin consent for `<tenant>`**. The status column must show a green **Granted** check.
+2. **Consent for B → C (the OBO → SAML exchange).** In the **OBO API app registration (app B)**, go to **API permissions**, confirm the permission on app **C** is listed (see [Step 2 §5](#step-2--register-the-obo-api--confidential-client-app-b)), then click **Grant admin consent**.
+3. **Re-run.** Sign in again from a fresh session. The `consent_required` error should be gone once both grants show as **Granted**.
+
+> **Note — this needs an admin.** Granting admin consent requires the **Application Administrator** or **Global Administrator** role in the tenant (see [Prerequisites](#prerequisites)). A standard user cannot clear `AADSTS65001` on their own for these permissions.
+
+> **Note — SAML-via-OBO is a special capability.** Returning a **SAML assertion** (rather than a JWT) from the OBO exchange is a tenant-level capability. Even after consent is granted, if the exchange returns a JWT or an error, confirm that SAML-issuance for app **C** is enabled on the tenant.
 
 ## Requirements
 
