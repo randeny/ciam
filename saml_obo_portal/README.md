@@ -25,6 +25,7 @@ A self-contained ASP.NET Core (.NET 9) application that demonstrates **Microsoft
 - [Configuration](#configuration)
   - [Values to update at deployment](#values-to-update-at-deployment)
 - [Run locally](#run-locally)
+  - [Local development / localhost testing](#local-development--localhost-testing)
   - [Setup instructions](#setup-instructions)
 - [Deploy the sample to Azure App Service (optional)](#deploy-the-sample-to-azure-app-service-optional)
 - [Important note on CORS configuration](#important-note-on-cors-configuration)
@@ -103,18 +104,20 @@ This demo relies on **three** app registrations in your External ID tenant. Crea
 
 ### The three identities at a glance
 
+> **Naming tip.** This guide refers to the apps as **A**, **B**, and **C**. To keep them straight in the Entra portal, give each registration a name that ends in the matching letter — for example `SAML-OBO-demo-spa-a`, `SAML-OBO-demo-api-b`, and `SAML-OBO-demo-saml-c`. Then whenever the README says "app **B**", you can tell at a glance which registration it means.
+
 | App registration | Type | Role in the flow | Feeds these settings |
 | --- | --- | --- | --- |
-| **A. Native-auth SPA** | Public client (SPA) | Signs the user in from the browser (username / password / OTP) and requests an access token for app **B**. | SPA bundle `clientId`, `metadataUrl`, `scope` (see [Updating the SPA](#updating-the-pre-built-spa-bundle)) |
-| **B. OBO API (confidential client)** | Web / confidential client that also **exposes an API** | Receives the SPA's access token and performs the On-Behalf-Of exchange that returns a **SAML2 assertion**. | `PortalLogon:OboClientId`, `OboClientSecret`, `OboScope`, `OboTokenUrl` |
-| **C. SAML application** | SAML-based app | The service provider the SAML assertion is *issued for*. Its federation metadata (signing cert + issuer) is what this app validates the assertion against. | `Saml:MetadataUrl`, `Saml:ExpectedAudience` |
+| **A. Native-auth SPA** — suggested name `SAML-OBO-demo-spa-a` | Public client (SPA) | Signs the user in from the browser (username / password / OTP) and requests an access token for app **B**. | SPA bundle `clientId`, `metadataUrl`, `scope` (see [Updating the SPA](#updating-the-pre-built-spa-bundle)) |
+| **B. OBO API (confidential client)** — suggested name `SAML-OBO-demo-api-b` | Web / confidential client that also **exposes an API** | Receives the SPA's access token and performs the On-Behalf-Of exchange that returns a **SAML2 assertion**. | `PortalLogon:OboClientId`, `OboClientSecret`, `OboScope`, `OboTokenUrl` |
+| **C. SAML application** — suggested name `SAML-OBO-demo-saml-c` | SAML-based app | The service provider the SAML assertion is *issued for*. Its federation metadata (signing cert + issuer) is what this app validates the assertion against. | `Saml:MetadataUrl`, `Saml:ExpectedAudience` |
 
 ### Step 1 — Register the SAML application (app C)
 
 The SAML assertion has to be issued *for* something. That "something" is a SAML app registration whose **identifier / audience URI** the demo validates against (`Saml:ExpectedAudience`, shipped as `urn:example:ps-saml-app`).
 
 1. In the Entra admin center of your External ID tenant, go to **Identity → Applications → App registrations → New registration**.
-2. Name it e.g. `saml-obo-demo-sp`. For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant — your External ID tenant). Leave redirect URI blank. Register.
+2. Name it e.g. `SAML-OBO-demo-saml-c` (the `-c` matches app **C**). For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant — your External ID tenant). Leave redirect URI blank. Register.
 3. Open **Expose an API → Application ID URI** and set it to a stable URN that will be the **SAML audience**, e.g. `urn:example:ps-saml-app`. Save. (Use this exact value for `Saml:ExpectedAudience`, or change both together.)
 4. Under **Manage → Authentication** (or the app's SAML/SSO configuration), record the **Application (client) ID** — you will need it for the metadata URL's `appid` query parameter.
 5. Build the **federation metadata URL** for `Saml:MetadataUrl`:
@@ -131,7 +134,7 @@ The SAML assertion has to be issued *for* something. That "something" is a SAML 
 
 This is the middle-tier confidential client. It is **both** the API the SPA asks for a token *and* the client that performs the OBO exchange.
 
-1. **App registrations → New registration**. Name it e.g. `saml-obo-demo-api`. For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant). Register.
+1. **App registrations → New registration**. Name it e.g. `SAML-OBO-demo-api-b` (the `-b` matches app **B**). For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant). Register.
 2. Copy the **Application (client) ID** → this is `PortalLogon:OboClientId`.
 3. **Expose an API**:
    - Set the **Application ID URI** to `api://<app-B-client-id>`.
@@ -154,7 +157,7 @@ This is the middle-tier confidential client. It is **both** the API the SPA asks
 
 This is the public client the browser uses to sign the user in without a redirect.
 
-1. **App registrations → New registration**. Name it e.g. `saml-obo-demo-spa`. For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant).
+1. **App registrations → New registration**. Name it e.g. `SAML-OBO-demo-spa-a` (the `-a` matches app **A**). For **Supported account types**, choose **Accounts in this organizational directory only** (single tenant).
 2. Under **Authentication**, add a **Single-page application** platform and enable settings required for **native authentication** (enable public client / native auth for the app). Add your portal origin(s) as redirect URIs / SPA origins so CORS succeeds — the same origins you list in `Cors:AllowedOrigins`.
 3. **API permissions → Add a permission →** select the **APIs my organization uses** tab (use **My APIs** instead only if you registered app **B** under the same account and it appears there) → search for and select app **B** → **Delegated permissions** → add the `access` scope. Click **Grant admin consent**.
 4. Copy the **Application (client) ID** → this is the SPA's `clientId` (baked into the bundle, see below).
@@ -252,6 +255,31 @@ dotnet restore
 dotnet run
 # then open http://localhost:5000/portallogon-direct/
 ```
+
+### Local development / localhost testing
+
+You can run the whole flow against `localhost` — a public deployment is not required to test. The common pitfall: `appsettings.json` ships with **placeholder / sample values**, and if you leave the SAML settings pointing at another tenant's app you'll sign in fine but the assertion check fails with:
+
+```
+Validation failed: The SAML response signature could not be verified against any signing certificate in the metadata.
+```
+
+That error means the assertion was issued but its signing certificate doesn't match the metadata the app loaded — i.e. `Saml:MetadataUrl` (or the SP settings) still points at **someone else's** app/tenant. To test locally, point **every** value at **your** host and **your** tenant:
+
+| Setting | Set it to (local) | Notes |
+| --- | --- | --- |
+| `Saml:ServiceProviderEntityId` | `https://localhost:<port>/samlapp` | Your local SP entity ID |
+| `Saml:AssertionConsumerServiceUrl` | `https://localhost:<port>/samlapp/acs` | Must match the ACS below |
+| `PortalLogon:AcsUrl` | `https://localhost:<port>/samlapp/acs` | Same value as the ACS above |
+| `Saml:MetadataUrl` | `https://<your-tenant>.ciamlogin.com/<tenant-id>/federationmetadata/2007-06/federationmetadata.xml?appid=<app-C-client-id>` | **Your** app **C** — this is the signing cert the assertion is validated against; a wrong value is what causes the signature error above |
+| `Cors:AllowedOrigins` | include `https://localhost:<port>` | Your local origin |
+| `config.js` (`clientId`, `metadataUrl`, `scope`) | your app **A** / tenant values | SPA-side; see [Updating the pre-built SPA bundle](#updating-the-pre-built-spa-bundle) |
+
+Then run on the port/scheme you referenced above (for example `dotnet run --urls https://localhost:<port>`) and open `https://localhost:<port>/portallogon-direct/`.
+
+> **Tip:** `<port>` only has to be consistent across the three SP/ACS settings, the origin you register on app **A**, and the URL you browse to. HTTPS is recommended — the SAML POST and native-auth calls should not travel over plain HTTP.
+
+> **Heads-up on CORS from `localhost`:** native-auth endpoints may not return CORS headers for a raw `*.ciamlogin.com` host — see [Local development and CORS](#local-development-and-cors) for the workaround.
 
 ### Setup instructions
 
@@ -418,7 +446,7 @@ If the OBO step returns:
 OBO exchange failed
 400: invalid_grant
 AADSTS65001: The user or administrator has not consented to use the application
-with ID '<app-B-client-id>' named 'SAML-OBO-demo-api'.
+with ID '<app-B-client-id>' named 'SAML-OBO-demo-api-b'.
 suberror: consent_required
 ```
 
@@ -430,7 +458,21 @@ the sign-in and native-auth calls are working — the failure is purely a **cons
 
 > **Note — this needs an admin.** Granting admin consent requires the **Application Administrator** or **Global Administrator** role in the tenant (see [Prerequisites](#prerequisites)). A standard user cannot clear `AADSTS65001` on their own for these permissions.
 
-> **Note — SAML-via-OBO is a special capability.** Returning a **SAML assertion** (rather than a JWT) from the OBO exchange is a tenant-level capability. Even after consent is granted, if the exchange returns a JWT or an error, confirm that SAML-issuance for app **C** is enabled on the tenant.
+> **Note — SAML-via-OBO is a special capability.** Returning a **SAML assertion** (rather than a JWT) from the OBO exchange is a tenant-level capability. Even after consent is granted, if the exchange returns a JWT or an error, confirm that SAML-issuance for app **C** is enabled on the tenant (see below).
+
+### How do I confirm SAML issuance is enabled for app C?
+
+There is **no self-service toggle** in the Entra portal for this — issuing a **SAML2 assertion** from the OBO token endpoint is enabled by Microsoft at the tenant/app level. To check whether it is active, run the flow and inspect what the OBO token endpoint returns:
+
+1. Sign in and trigger the OBO exchange, then capture the token the API gets back from the token endpoint.
+2. **Decode the returned token:**
+   - If it is a **JWT** (three base64url segments separated by dots, starting `eyJ…`), SAML issuance is **not** enabled — the tenant fell back to a normal access token.
+   - If it is a **SAML assertion** (base64 that decodes to XML beginning with `<Assertion …>` / `<saml2:Assertion …>`), SAML issuance **is** enabled and working.
+3. If you get a JWT (or an error) and you need the SAML assertion, raise a request with Microsoft to enable **SAML-assertion issuance via OBO** for your tenant and app **C**. This is not something you can switch on yourself.
+
+### `Validation failed: The SAML response signature could not be verified …`
+
+The assertion was issued, but its signing certificate doesn't match the metadata the app loaded — almost always because `Saml:MetadataUrl` (or the SP settings) still points at **someone else's** app/tenant (for example the sample defaults) instead of **your** app **C**. Point every SAML value at your own tenant and host — see [Local development / localhost testing](#local-development--localhost-testing).
 
 ## Requirements
 
