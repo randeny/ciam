@@ -462,13 +462,14 @@ the sign-in and native-auth calls are working — the failure is purely a **cons
 
 ### How do I confirm SAML issuance is enabled for app C?
 
-There is **no self-service toggle** in the Entra portal for this — issuing a **SAML2 assertion** from the OBO token endpoint is enabled by Microsoft at the tenant/app level. To check whether it is active, run the flow and inspect what the OBO token endpoint returns:
+You can check this two ways — start with the portal:
 
-1. Sign in and trigger the OBO exchange, then capture the token the API gets back from the token endpoint.
-2. **Decode the returned token:**
-   - If it is a **JWT** (three base64url segments separated by dots, starting `eyJ…`), SAML issuance is **not** enabled — the tenant fell back to a normal access token.
-   - If it is a **SAML assertion** (base64 that decodes to XML beginning with `<Assertion …>` / `<saml2:Assertion …>`), SAML issuance **is** enabled and working.
-3. If you get a JWT (or an error) and you need the SAML assertion, raise a request with Microsoft to enable **SAML-assertion issuance via OBO** for your tenant and app **C**. This is not something you can switch on yourself.
+1. **Entra portal → Enterprise applications → app C → Single sign-on.** If app **C** is configured as a **SAML-based** application (SSO method **SAML**, with the SP Entity ID / Reply URL / signing certificate populated), SAML issuance is set up for it. If the SSO blade doesn't offer SAML, or app **C** isn't listed as an Enterprise application, the capability isn't in place yet.
+2. **Inspect what the OBO exchange returns** (a runtime confirmation): sign in, trigger the OBO exchange, and decode the token the API gets back —
+   - a **JWT** (starts `eyJ…`) means the tenant fell back to a normal access token — SAML issuance is **not** in effect;
+   - a base64 **SAML assertion** (decodes to XML beginning `<Assertion …>` / `<saml2:Assertion …>`) means it **is** working.
+
+Note that returning a SAML assertion from the OBO endpoint is enabled by Microsoft at the tenant/app level — there is **no self-service toggle** for the OBO behaviour itself. If app **C**'s Enterprise-app SAML config looks correct but you still only ever get a JWT (or an error), raise a request with Microsoft to enable **SAML-assertion issuance via OBO** for your tenant and app **C**.
 
 ### `Validation failed: The SAML response signature could not be verified …`
 
