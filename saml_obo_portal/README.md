@@ -258,6 +258,8 @@ dotnet run
 
 ### Local development / localhost testing
 
+> **Note on HTTP vs HTTPS:** For simplicity, this sample uses plain HTTP for the default local development instances (e.g. `http://localhost:5000`, `http://localhost:5173`), which we consider secure enough for local validation purposes only. In production — or any non-local test scenario — you should always use HTTPS with the latest recommended cryptographic standards.
+
 You can run the whole flow against `localhost` — a public deployment is not required to test. The common pitfall: `appsettings.json` ships with **placeholder / sample values**, and if you leave the SAML settings pointing at another tenant's app you'll sign in fine but the assertion check fails with:
 
 ```
