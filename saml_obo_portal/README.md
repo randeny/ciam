@@ -4,7 +4,9 @@ A self-contained ASP.NET Core (.NET 9) application that demonstrates **Microsoft
 
 ## What it demonstrates
 
-1. **Native auth SPA** — A pre-built browser client signs the user in directly against Entra External ID (`<custom url>`) using the native authentication flow (username / password / OTP), with no redirect to a hosted login page.
+1. **Native auth SPA** — A pre-built browser client signs the user in directly against Entra External ID (`<custom url>`) using the native authentication flow (username / password, plus an OTP/MFA challenge if your tenant requires one), with no redirect to a hosted login page.
+
+   > **Note:** Whether users are prompted for an OTP (or other MFA) depends on your Entra External ID tenant's authentication-method and Conditional Access policies — it is not driven by this sample. If your tenant isn't configured for OTP, sign-in completes with just username and password.
 2. **Backend OBO exchange** — The SPA posts the resulting access token to the backend, which performs a confidential-client OBO exchange requesting `requested_token_type=urn:ietf:params:oauth:token-type:saml2`.
 3. **SAML SSO** — The backend wraps the returned SAML assertion in a `<samlp:Response>` and auto-POSTs it to the SAML Assertion Consumer Service (ACS). The SAML SP validates signature, audience, lifetime, and replay, then shows the result.
 
@@ -43,7 +45,7 @@ sequenceDiagram
     participant Backend as Backend (OBO client)
     participant SP as SAML SP
 
-    SPA->>Entra: Native auth (username / password / OTP)
+    SPA->>Entra: Native auth (username / password [+ OTP if required])
     Entra-->>SPA: Access token
 
     SPA->>Backend: POST /portallogon/sso (access token)
@@ -80,7 +82,7 @@ sequenceDiagram
 
 This single ASP.NET Core app is really two cooperating pieces:
 
-- **The portal / SPA application (required).** A browser single-page app (served from `wwwroot/portallogon-direct/`) backed by `PortalLogonController`. The SPA signs the user in directly against Entra External ID using native authentication (username / password / OTP, no redirect), then hands the resulting access token to the backend. The backend performs the confidential-client **On-Behalf-Of exchange** that turns that token into a **SAML 2.0 assertion** and auto-POSTs it onward. This is the heart of the demo and is always in play.
+- **The portal / SPA application (required).** A browser single-page app (served from `wwwroot/portallogon-direct/`) backed by `PortalLogonController`. The SPA signs the user in directly against Entra External ID using native authentication (username / password [+ OTP if the tenant requires it], no redirect), then hands the resulting access token to the backend. The backend performs the confidential-client **On-Behalf-Of exchange** that turns that token into a **SAML 2.0 assertion** and auto-POSTs it onward. This is the heart of the demo and is always in play.
 - **The sample SAML application (optional).** A minimal SAML 2.0 **service provider** implemented by `SamlController` and the helpers in `Saml/`, exposed under `/samlapp` (`/acs`, `/result/{id}`, `/metadata`). It exists so the demo is self-contained: it receives the SAML assertion the OBO step produces, validates it (signature, audience, lifetime, replay) against the IdP federation metadata, and renders the decoded claims. In a real deployment you would point the OBO step at your *own* SAML application instead — so this SP is a convenient stand-in you can drop once you wire in the real one.
 
 ## Prerequisites
@@ -108,7 +110,7 @@ This demo relies on **three** app registrations in your External ID tenant. Crea
 
 | App registration | Type | Role in the flow | Feeds these settings |
 | --- | --- | --- | --- |
-| **A. Native-auth SPA** — suggested name `SAML-OBO-demo-spa-a` | Public client (SPA) | Signs the user in from the browser (username / password / OTP) and requests an access token for app **B**. | SPA bundle `clientId`, `metadataUrl`, `scope` (see [Updating the SPA](#updating-the-pre-built-spa-bundle)) |
+| **A. Native-auth SPA** — suggested name `SAML-OBO-demo-spa-a` | Public client (SPA) | Signs the user in from the browser (username / password, plus OTP if required) and requests an access token for app **B**. | SPA bundle `clientId`, `metadataUrl`, `scope` (see [Updating the SPA](#updating-the-pre-built-spa-bundle)) |
 | **B. OBO API (confidential client)** — suggested name `SAML-OBO-demo-api-b` | Web / confidential client that also **exposes an API** | Receives the SPA's access token and performs the On-Behalf-Of exchange that returns a **SAML2 assertion**. | `PortalLogon:OboClientId`, `OboClientSecret`, `OboScope`, `OboTokenUrl` |
 | **C. SAML application** — suggested name `SAML-OBO-demo-saml-c` | SAML-based app | The service provider the SAML assertion is *issued for*. Its federation metadata (signing cert + issuer) is what this app validates the assertion against. | `Saml:MetadataUrl`, `Saml:ExpectedAudience` |
 
