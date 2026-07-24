@@ -1,0 +1,87 @@
+name: Dependency Audit
+
+# Weekly safety-net scan for vulnerable and outdated NuGet dependencies.
+# Complements Dependabot: catches transitive vulnerabilities (like NU1903 in
+# System.Security.Cryptography.Xml) and surfaces outdated packages, opening a
+# tracking issue when action is needed.
+
+on:
+  schedule:
+    # 06:30 PT Mondays (13:30 UTC) — just after Dependabot's window.
+    - cron: "30 13 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  PROJECT: saml_obo_portal/SamlOboApp.csproj
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore "$PROJECT"
+
+      - name: Scan for vulnerable packages
+        id: vuln
+        run: |
+          set -o pipefail
+          dotnet list "$PROJECT" package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          if grep -q "has the following vulnerable packages" vuln.txt; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scan for outdated packages (informational)
+        run: dotnet list "$PROJECT" package --outdated --include-transitive 2>&1 | tee outdated.txt || true
+
+      - name: Open or update tracking issue on vulnerabilities
+        if: steps.vuln.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="Vulnerable dependencies detected by weekly audit"
+          BODY_FILE=body.md
+          {
+            echo "The weekly Dependency Audit workflow found **vulnerable packages**."
+            echo ""
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "### \`dotnet list package --vulnerable --include-transitive\`"
+            echo ""
+            echo '```'
+            cat vuln.txt
+            echo '```'
+            echo ""
+            echo "### \`dotnet list package --outdated\` (informational)"
+            echo ""
+            echo '```'
+            cat outdated.txt 2>/dev/null || echo "(none)"
+            echo '```'
+          } > "$BODY_FILE"
+
+          EXISTING=$(gh issue list --state open --label dependency-audit --search "$TITLE in:title" --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body-file "$BODY_FILE"
+            echo "Updated existing issue #$EXISTING"
+          else
+            gh label create dependency-audit --color B60205 --description "Automated dependency audit findings" 2>/dev/null || true
+            gh issue create --title "$TITLE" --label dependency-audit --body-file "$BODY_FILE"
+          fi
+
+      - name: Fail the run if vulnerabilities were found
+        if: steps.vuln.outputs.found == 'true'
+        run: |
+          echo "::error::Vulnerable dependencies detected. See the tracking issue and job logs."
+          exit 1
