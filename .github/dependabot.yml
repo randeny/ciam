@@ -1,0 +1,42 @@
+# Dependabot configuration for automated dependency maintenance.
+# - Security updates (auto-PRs for known-vulnerable packages) are enabled
+#   separately in repo Settings > Code security, and catch issues like the
+#   System.Security.Cryptography.Xml NU1903 advisory.
+# - The version updates below keep dependencies current (including transitive
+#   ones flagged by `dotnet list package --outdated`) on a weekly cadence.
+version: 2
+updates:
+  # .NET / NuGet project
+  - package-ecosystem: "nuget"
+    directory: "/saml_obo_portal"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "nuget"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Bundle non-major updates into a single PR to reduce noise.
+      nuget-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions (applies once workflows are added under .github/workflows).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Los_Angeles"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
